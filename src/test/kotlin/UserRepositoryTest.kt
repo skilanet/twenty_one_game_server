@@ -1,9 +1,6 @@
 import db.UsersDAO
 import db.UsersTable
 import db.configureDatabase
-import domain.impl.DummyUsersRepository
-import domain.impl.UsersRepositoryImpl
-import domain.repository.UsersRepository
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -19,7 +16,6 @@ import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import org.junit.jupiter.api.DisplayName
-import routes.configureUserRoutes
 import java.util.*
 import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
@@ -29,9 +25,8 @@ import kotlin.uuid.ExperimentalUuidApi
 @OptIn(ExperimentalUuidApi::class)
 class UserRepositoryTest {
 
-    private fun ApplicationTestBuilder.setupWithDB(repository: UsersRepository): HttpClient {
+    private fun ApplicationTestBuilder.setupWithDB(): HttpClient {
         application {
-            configureUserRoutes(repository)
             configureServer()
             configureDatabase()
             transaction {
@@ -77,7 +72,7 @@ class UserRepositoryTest {
     @DisplayName("get all users")
     @Test
     fun `get all users`() = testApplication {
-        val client = setupWithDB(DummyUsersRepository())
+        val client = setupWithDB()
         val response = client.get("/users/all")
         val result = response.body<List<User>>()
 
@@ -96,7 +91,7 @@ class UserRepositoryTest {
     @DisplayName("create user")
     @Test
     fun `create user`() = testApplication {
-        val client = setupWithDB(DummyUsersRepository())
+        val client = setupWithDB()
         val info = UserInfo(15, 7)
         val response1 = client.get("/users") {
             contentType(ContentType.Application.Json)
@@ -116,7 +111,7 @@ class UserRepositoryTest {
     @DisplayName("update user")
     @Test
     fun `update user`() = testApplication {
-        val client = setupWithDB(DummyUsersRepository())
+        val client = setupWithDB()
 
         val info = UserInfo(15, 7)
         val response1 = client.post("/users/update/7cbdd1a5-e6fd-4b00-814a-7db0607e8a4d") {
@@ -129,7 +124,7 @@ class UserRepositoryTest {
     @DisplayName("update user empty uuid 400")
     @Test
     fun `400 empty uuid`() = testApplication {
-        val client = setupWithDB(DummyUsersRepository())
+        val client = setupWithDB()
 
         val info = UserInfo(15, 7)
         val response1 = client.post("/users/update") {
@@ -142,7 +137,7 @@ class UserRepositoryTest {
     @DisplayName("update user uuid invalid format 400")
     @Test
     fun `400 uuid invalid format`() = testApplication {
-        val client = setupWithDB(DummyUsersRepository())
+        val client = setupWithDB()
 
         val info = UserInfo(15, 7)
         val response1 = client.post("/users/update/7cbdd1a5814a7db0607e8a4d") {
@@ -155,7 +150,7 @@ class UserRepositoryTest {
     @DisplayName("update user not found 404")
     @Test
     fun `404 user not found`() = testApplication {
-        val client = setupWithDB(DummyUsersRepository())
+        val client = setupWithDB()
 
         val info = UserInfo(15, 7)
         val response1 = client.post("/users/update/7cdbd1a5-e6fd-4000-814a-7db0607e8a4d") {
@@ -168,7 +163,7 @@ class UserRepositoryTest {
     @DisplayName("delete user")
     @Test
     fun `delete user`() = testApplication {
-        val client = setupWithDB(DummyUsersRepository())
+        val client = setupWithDB()
 
         val response1 = client.get("/users/all")
         val result1 = response1.body<List<User>>()
@@ -189,7 +184,7 @@ class UserRepositoryTest {
     @DisplayName("delete user invalid uuid 400")
     @Test
     fun `400 delete invalid uuid`() = testApplication {
-        val client = setupWithDB(DummyUsersRepository())
+        val client = setupWithDB()
 
         val response1 = client.delete("/users/invalid")
         assertEquals(HttpStatusCode.BadRequest, response1.status)
@@ -198,7 +193,7 @@ class UserRepositoryTest {
     @DisplayName("delete user empty uuid 400")
     @Test
     fun `delete empty uuid`() = testApplication {
-        val client = setupWithDB(DummyUsersRepository())
+        val client = setupWithDB()
 
         val response1 = client.delete("/users/")
         assertEquals(HttpStatusCode.BadRequest, response1.status)
@@ -207,7 +202,7 @@ class UserRepositoryTest {
     @DisplayName("delete user not found 404")
     @Test
     fun `delete non-existing user`() = testApplication {
-        val client = setupWithDB(DummyUsersRepository())
+        val client = setupWithDB()
 
         val response1 = client.delete("/users/7cdb1da5-e6fd-4b00-814a-7db0607e8a4d")
         assertEquals(HttpStatusCode.NotFound, response1.status)

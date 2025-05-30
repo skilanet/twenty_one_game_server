@@ -1,16 +1,18 @@
 package model.game
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
-class Player(
+data class Player(
     val id: String,
     val name: String,
-    private val hand: MutableList<Card> = mutableListOf(),
     var score: Int = 0,
     var isStanding: Boolean = false,
+    @Transient
+    private val hand: MutableList<Card> = mutableListOf()
 ) {
-    private fun calculateHand(): Int {
+    fun calculateHand(): Int {
         var total = 0
         var aces = 0
         hand.forEach { card ->
@@ -34,4 +36,9 @@ class Player(
         calculateHand()
         return card
     }
+
+    fun getHand(): List<Card> = hand.toList()
+
+    val handSize: Int
+        get() = hand.size
 }

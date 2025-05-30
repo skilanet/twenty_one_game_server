@@ -49,3 +49,11 @@ dependencies {
     testImplementation("io.ktor:ktor-server-test-host")
     testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
 }
+
+tasks {
+    shadowJar {
+        archiveBaseName.set("app")
+        archiveClassifier.set("all")
+        archiveVersion.set("")
+    }
+}

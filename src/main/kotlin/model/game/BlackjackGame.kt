@@ -1,8 +1,10 @@
 package model.game
 
+import model.toDto
 import websoket.state.GameCommand
 import websoket.state.GameEvent
 import websoket.state.GameState
+import websoket.state.PlayerScoreOutOfBounds
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -12,7 +14,7 @@ class BlackjackGame {
     private var currentPlayerIndex: Int = 0
     var gameInProgress = false
     val isGameOver: Boolean
-        get() = !gameInProgress && players.values.all { it.isStanding }
+        get() = gameInProgress && players.values.all { it.isStanding || it.score > 21 }
     val playersCount: Int
         get() = players.size
 
@@ -46,72 +48,126 @@ class BlackjackGame {
             throw IllegalArgumentException("Необходимо ровно 2 игрока для начала игры")
         }
         gameInProgress = true
-        currentPlayerIndex = 0
+        // Случайным образом выбираем игрока, который начинает
+        currentPlayerIndex = (0..1).random()
         dealInitialCards()
         return getGameState()
     }
 
-    fun hit(playerId: String): Card {
+    fun hit(playerId: String): Pair<Card, Boolean> {
         val player = players[playerId] ?: throw IllegalArgumentException("Игрок не найден")
+        val playersList = players.values.toList()
 
-        if (player.isStanding) {
-            throw IllegalStateException("Игроку достаточно карт")
+        // Проверяем, что это ход текущего игрока
+        if (playersList[currentPlayerIndex].id != playerId) {
+            throw IllegalStateException("Сейчас ход другого игрока")
+        }
+
+        if (player.isStanding || player.score > 21) {
+            throw PlayerScoreOutOfBounds(playerId, player.score)
         }
 
         val card = dealCards(player)
+        var busted = false
 
+        // Если у игрока перебор, автоматически передаем ход
         if (player.score > 21) {
             player.isStanding = true
+            busted = true
             nextPlayer()
+            // Проверяем, не закончилась ли игра
+            if (isGameOver) {
+                gameInProgress = false
+            }
         }
 
-        return card
+        return Pair(card, busted)
     }
 
     fun stand(playerId: String) {
         val player = players[playerId] ?: throw IllegalArgumentException("Игрок не найден")
+        val playersList = players.values.toList()
+
+        // Проверяем, что это ход текущего игрока
+        if (playersList[currentPlayerIndex].id != playerId) {
+            throw IllegalStateException("Сейчас ход другого игрока")
+        }
+
         player.isStanding = true
         nextPlayer()
+
+        // Проверяем, не закончилась ли игра
+        if (isGameOver) {
+            gameInProgress = false
+        }
     }
 
     private fun nextPlayer() {
         val playersList = players.values.toList()
-        var nextIndex = (currentPlayerIndex + 1) % playersList.size
-        while (nextIndex != currentPlayerIndex) {
-            if (!playersList[nextIndex].isStanding) {
-                currentPlayerIndex = nextIndex
-                return
-            }
-            nextIndex = (nextIndex + 1) % playersList.size
+        // Переключаемся на другого игрока
+        currentPlayerIndex = (currentPlayerIndex + 1) % playersList.size
+
+        // Если следующий игрок уже закончил игру (стоит или перебор), игра завершается
+        val nextPlayer = playersList[currentPlayerIndex]
+        if (nextPlayer.isStanding || nextPlayer.score > 21) {
+            gameInProgress = false
         }
     }
 
-    fun getWinner(): Player? {
-        val validPlayers = players.filter { it.value.score <= 21 }
-        if (validPlayers.size == 1)
-            return validPlayers.values.first()
-        else if (validPlayers.size == 2) {
-            return validPlayers.values.maxByOrNull { it.score }
-        }
+    fun getWinner(): String? {
+        val validPlayers = players.values.filter { it.score <= 21 }
 
-        return players.values.minByOrNull { it.score }
+        return when (validPlayers.size) {
+            0 -> {
+                players.playerIdWithMinScoreOrNull()
+            }
+
+            1 -> {
+                validPlayers.first().id
+            }
+
+            else -> {
+                players.playerIdWithMaxScoreOrNull()
+            }
+        }
+    }
+
+    fun Map<String, Player>.playerIdWithMaxScoreOrNull(): String? {
+        val scores = this.values.map { it.score }
+        return if (scores.distinct().size > 1) {
+            this.maxByOrNull { it.value.score }?.key
+        } else null
+    }
+
+    fun Map<String, Player>.playerIdWithMinScoreOrNull(): String? {
+        val scores = this.values.map { it.score }
+        return if (scores.distinct().size > 1) {
+            this.minByOrNull { it.value.score }?.key
+        } else null
     }
 
     fun getGameState(): GameState {
         val playersList = players.values.toList()
-        val currentPlayerId = if (playersList.isNotEmpty() && currentPlayerIndex < players.size) {
+        val currentPlayerId = if (gameInProgress && playersList.isNotEmpty() && currentPlayerIndex < players.size) {
             playersList[currentPlayerIndex].id
         } else {
             ""
         }
 
-        val winner = if (!gameInProgress && playersList.all { it.isStanding }) getWinner() else null
-        val gameOver = !gameInProgress
+        val gameOver = !gameInProgress && (isGameOver || playersList.size == 2)
 
         val message = when {
-            gameOver && winner != null -> "Игра завершена! Победитель: ${winner.name} с ${winner.score} очками!"
-            gameOver -> "Игра завершена! Ничья!"
-            else -> "Игра продолжается. Ход: ${playersList.getOrNull(currentPlayerIndex)?.name ?: "?"}"
+            gameOver -> ""
+            gameInProgress -> {
+                val currentPlayer = playersList.getOrNull(currentPlayerIndex)
+                if (currentPlayer != null) {
+                    "Ход игрока: ${currentPlayer.name} (${currentPlayer.score} очков)"
+                } else {
+                    "Игра продолжается"
+                }
+            }
+
+            else -> "Ожидание игроков..."
         }
 
         return GameState(
@@ -122,23 +178,11 @@ class BlackjackGame {
         )
     }
 
-    fun processStartGameCommand() {
-        return if (gameInProgress) {
-            GameEvent.Error("Игра уже идёт")
-        } else {
-            try {
-                val gameState = startGame()
-                GameEvent.GameStarted(gameState)
-            } catch (e: Exception) {
-            }
-        }
-    }
-
     fun processCommand(command: GameCommand): GameEvent {
         return when (command) {
             is GameCommand.Join -> {
-                val player = addPlayer(command.playerName)
-                GameEvent.Info("")
+                // Join уже обработан в GameWebSocket
+                GameEvent.Info("Игрок присоединился")
             }
 
             is GameCommand.StartGame -> {
@@ -160,7 +204,12 @@ class BlackjackGame {
                 } else {
                     try {
                         val card = hit(command.playerId)
-                        GameEvent.CardDealt(command.playerId, card)
+                        if (players[command.playerId]?.isStanding == true && players.values.all { it.isStanding }) {
+                            gameInProgress = false
+                            GameEvent.GameOver(getWinner(), getGameState())
+                        } else {
+                            GameEvent.CardDealt(command.playerId, card.first.toDto())
+                        }
                     } catch (e: Exception) {
                         GameEvent.Error(e.message ?: "Неизвестная ошибка")
                     }
@@ -168,17 +217,26 @@ class BlackjackGame {
             }
 
             is GameCommand.Stand -> {
-                if (gameInProgress) {
+                if (!gameInProgress) {
                     GameEvent.Error("Игра ещё не началась")
                 } else {
                     try {
                         stand(command.playerId)
-                        GameEvent.PlayerStood(command.playerId)
+                        if (players.values.all { it.isStanding }) {
+                            gameInProgress = false
+                            GameEvent.GameOver(getWinner(), getGameState())
+                        } else {
+                            GameEvent.PlayerStood(command.playerId)
+                        }
                     } catch (e: Exception) {
                         GameEvent.Error(e.message ?: "Неизвестная ошибка")
                     }
                 }
             }
         }
+    }
+
+    fun getOpponentId(playerId: String): String? {
+        return players.values.find { it.id != playerId }?.id
     }
 }

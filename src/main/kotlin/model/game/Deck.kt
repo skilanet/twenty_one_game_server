@@ -28,8 +28,9 @@ class Deck {
     }
 
     private fun generateDeck() {
+        cards.clear()
         Suit.entries.forEach { suit ->
-            Rank.entries.forEach {  rank ->
+            Rank.entries.forEach { rank ->
                 cards += Card(rank.name, suit, rank)
             }
         }
@@ -37,6 +38,10 @@ class Deck {
     }
 
     fun getRandomCard(): Card {
+        if (cards.isEmpty()) {
+            // Если карты закончились, генерируем новую колоду
+            generateDeck()
+        }
         val card = cards.random()
         cards.remove(card)
         return card

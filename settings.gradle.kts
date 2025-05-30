@@ -1,1 +1,1 @@
-rootProject.name = "Twenty-one game server"
+rootProject.name = "twenty_one_game_server"

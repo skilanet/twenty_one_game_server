@@ -2,8 +2,8 @@ package websoket.state
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import model.game.Card
 import model.game.Player
+import model.response.CardDto
 
 @Serializable
 sealed class GameEvent {
@@ -17,11 +17,11 @@ sealed class GameEvent {
 
     @Serializable
     @SerialName("CardDealt")
-    data class CardDealt(val playerId: String, val card: Card) : GameEvent()
+    data class CardDealt(val playerId: String, val card: CardDto) : GameEvent()
 
     @Serializable
     @SerialName("PlayerTurn")
-    data class PlayerTurn(val playerId: String) : GameEvent()
+    data object PlayerTurn : GameEvent()
 
     @Serializable
     @SerialName("PlayerStood")
@@ -29,7 +29,7 @@ sealed class GameEvent {
 
     @Serializable
     @SerialName("GameOver")
-    data class GameOver(val winner: Player?, val gameState: GameState) : GameEvent()
+    data class GameOver(val winnerId: String?, val gameState: GameState) : GameEvent()
 
     @Serializable
     @SerialName("Error")
@@ -38,4 +38,13 @@ sealed class GameEvent {
     @Serializable
     @SerialName("Info")
     data class Info(val message: String) : GameEvent()
+
+    @Serializable
+    @SerialName("AnotherPlayerTookCard")
+    object AnotherPlayerTookCard: GameEvent()
+
+    @Serializable
+    @SerialName("OpponentCards")
+    data class OpponentCards(val opponentId: String, val cards: List<CardDto>) : GameEvent()
 }
+
